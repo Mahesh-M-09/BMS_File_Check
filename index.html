@@ -98,6 +98,11 @@
         document.getElementById('fileInput').addEventListener('change', function(event) {
             const file = event.target.files[0];
             const reader = new FileReader();
+            
+            // Clear previous table rows
+            const tbody = document.querySelector('#resultTable tbody');
+            tbody.innerHTML = '';  // Clear the existing rows
+
             reader.onload = function(e) {
                 const content = e.target.result;
                 const lines = content.split('\n');
@@ -161,8 +166,6 @@
                 });
 
                 // Append data to the table
-                const tbody = document.querySelector('#resultTable tbody');
-
                 const rows = [
                     { label: 'Serial Number', value: serialNumber, base: '', pass: true },
                     { label: 'RTC Verification', value: rtcValue, base: baseValues['RTC'], pass: rtcPass },

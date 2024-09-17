@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log File Upload and Display</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f9;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        input[type="file"] {
+            display: block;
+            margin: 20px auto;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        table {
+            width: 80%;
+            margin: 20px auto;
+            border-collapse: collapse;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        th {
+            background-color: #009879;
+            color: white;
+            font-weight: bold;
+        }
+
+        td {
+            font-size: 14px;
+        }
+
+        .pass {
+            background-color: lightgreen;
+        }
+
+        .fail {
+            background-color: lightcoral;
+        }
+
+        .blank {
+            background-color: #f9f9f9;
+        }
+
+        @media only screen and (max-width: 768px) {
+            th, td {
+                padding: 10px;
+            }
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Upload Log File</h1>
+    <input type="file" id="fileInput" accept=".log" />
+    <table id="resultTable">
+        <thead>
+            <tr>
+                <th>Parameter</th>
+                <th>Base Value</th>
+                <th>Value</th>
+                <th>Pass/Fail</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const content = e.target.result;
+                const lines = content.split('\n');
+
+                // Extract the required values
+                let serialNumber = '';
+                let rtcPass = false;
+                let rtcValue = '';
+                let productionPass = false;
+                let productionValue = '';
+                let bmsData = {};
+                let hmiDisplay = false;
+                let noDamage = false;
+                let chargePort = "No";
+
+                const baseValues = {
+                    'Design Voltage': 36,
+                    'Relative SOC': 25,
+                    'BatteryFWVer Major': 1,
+                    'BatteryFWVer Minor': 20,
+                    'Cycle Count': 0,
+                    'RTC': 'RTC - UTC = +/-40'
+                };
+
+                lines.forEach(line => {
+                    if (line.includes('Serial no:')) {
+                        serialNumber = line.split('Serial no:')[1].trim();
+                    }
+                    if (line.includes('RTC:')) {
+                        rtcPass = line.includes("'pass': True");
+                        rtcValue = line.match(/'value': '(\d+.\d+)'/)[1];
+                    }
+                    if (line.includes('Prod. date:')) {
+                        productionPass = line.includes("'pass': True");
+                        productionValue = line.match(/'value': '(.*?)'/)[1];
+                    }
+                    if (line.includes('BMS data:')) {
+                        const bmsMatches = line.match(/'condition': '(.*?)', 'value': (.*?)[,\]]/g);
+                        bmsMatches.forEach(match => {
+                            const condition = match.match(/'condition': '(.*?)'/)[1];
+                            let value = match.match(/'value': (.*?)[,\]]/)[1];
+                            value = value.replace('}', '').trim(); // Clean up extra characters like '}' from value
+                            bmsData[condition] = value;
+                        });
+                    }
+                    if (line.includes('BatteryFWVer_Major')) {
+                        bmsData['BatteryFWVer Major'] = line.match(/BatteryFWVer_Major = (\d+)/)[1];
+                    }
+                    if (line.includes('BatteryFWVer_Minor')) {
+                        bmsData['BatteryFWVer Minor'] = line.match(/BatteryFWVer_Minor = (\d+)/)[1];
+                    }
+                    if (line.includes('HMI displaying correctly:')) {
+                        hmiDisplay = line.includes('True');
+                    }
+                    if (line.includes('No visible damage:')) {
+                        noDamage = line.includes('True');
+                    }
+                    if (line.includes('Charge port')) {
+                        chargePort = line.includes('True') ? "Yes" : "No";
+                    }
+                });
+
+                // Append data to the table
+                const tbody = document.querySelector('#resultTable tbody');
+
+                const rows = [
+                    { label: 'Serial Number', value: serialNumber, base: '', pass: true },
+                    { label: 'RTC Verification', value: rtcValue, base: baseValues['RTC'], pass: rtcPass },
+                    { label: 'Production Date', value: productionValue, base: '>=2023-07-26', pass: productionPass },
+                    { label: 'Design Voltage', value: bmsData['Design_Voltage = 36'] || 'N/A', base: baseValues['Design Voltage'], pass: bmsData['Design_Voltage = 36'] == baseValues['Design Voltage'] },
+                    { label: 'Relative SOC', value: bmsData['Relative_SOC <= 25'] || 'N/A', base: baseValues['Relative SOC'], pass: bmsData['Relative_SOC <= 25'] <= baseValues['Relative SOC'] },
+                    { label: 'BatteryFWVer Major', value: bmsData['BatteryFWVer Major'] || 'N/A', base: baseValues['BatteryFWVer Major'], pass: bmsData['BatteryFWVer Major'] == baseValues['BatteryFWVer Major'] },
+                    { label: 'BatteryFWVer Minor', value: bmsData['BatteryFWVer Minor'] || 'N/A', base: baseValues['BatteryFWVer Minor'], pass: bmsData['BatteryFWVer Minor'] == baseValues['BatteryFWVer Minor'] },
+                    { label: 'Cycle Count', value: bmsData['Cycle_Count = 0'] || 'N/A', base: baseValues['Cycle Count'], pass: bmsData['Cycle_Count = 0'] == baseValues['Cycle Count'] },
+                    { label: 'HMI Display', value: hmiDisplay ? 'Yes' : 'No', base: '', pass: hmiDisplay },
+                    { label: 'No Visible Damage', value: noDamage ? 'Yes' : 'No', base: '', pass: noDamage },
+                    { label: 'Charge Port', value: chargePort, base: '', pass: chargePort === "Yes" }
+                ];
+
+                rows.forEach(row => {
+                    const tableRow = document.createElement('tr');
+                    tableRow.innerHTML = `
+                        <td>${row.label}</td>
+                        <td>${row.base}</td>
+                        <td>${row.value}</td>
+                        <td class="${row.pass === null ? 'blank' : (row.pass ? 'pass' : 'fail')}">${row.pass === null ? '' : (row.pass ? 'Pass' : 'Fail')}</td>
+                    `;
+                    tbody.appendChild(tableRow);
+                });
+            };
+
+            reader.readAsText(file);
+        });
+    </script>
+</body>
+</html>
